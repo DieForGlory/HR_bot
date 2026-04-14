@@ -91,11 +91,7 @@ async def reg_dept_text(message: Message, state: FSMContext):
     await state.set_state(RegStates.position)
     await message.answer("Укажите должность:")
 
-@router.message(RegStates.department)
-async def reg_dept(message: Message, state: FSMContext):
-    await state.update_data(department=message.text)
-    await state.set_state(RegStates.position)
-    await message.answer("Укажите должность:")
+
 
 
 @router.message(RegStates.position)
@@ -146,40 +142,54 @@ async def process_calendar(callback_query: CallbackQuery, callback_data: CalCB, 
 async def reg_car(message: Message, state: FSMContext):
     await state.update_data(car_info=message.text)
     await state.set_state(RegStates.face_id_photo)
-    await message.answer("Загрузите фото для Face ID:")
+    await message.answer("Загрузите фото для Face ID (только JPG/PNG):")
 
 
-@router.message(RegStates.face_id_photo, F.photo)
+@router.message(RegStates.face_id_photo, F.photo | F.document.mime_type.in_(["image/jpeg", "image/png"]))
 async def reg_photo(message: Message, state: FSMContext, bot: Bot):
-    photo_id = message.photo[-1].file_id
+    photo_id = message.photo[-1].file_id if message.photo else message.document.file_id
     data = await state.get_data()
 
     async with async_session() as session:
+        dept_id = data.get('department_id')
+        dept_name = "Не указан"
+        if dept_id:
+            dept = await session.get(Department, dept_id)
+            if dept:
+                dept_name = dept.name
+
         new_user = User(
             tg_id=message.from_user.id,
             fullname=data['fullname'],
             username=message.from_user.username,
-            department_id=data.get('department_id'),
+            department_id=dept_id,
             position=data['position'],
             phone=data['phone'],
             birth_date=data['birth_date'],
             car_info=data['car_info'],
             face_id_photo=photo_id,
-            language_code=data['language_code'],
+            language_code=data.get('language_code', 'ru'),
             is_active=False
         )
         session.add(new_user)
         await session.flush()
 
         hrs = await session.execute(select(User).where(User.role == "hr"))
+        caption = f"📝 Новая заявка:\nФИО: {data['fullname']}\nОтдел: {dept_name}\nТел: {data['phone']}\nДР: {data['birth_date']}"
+
         for hr in hrs.scalars():
-            await bot.send_photo(
-                hr.tg_id, photo_id,
-                caption=f"📝 Новая заявка:\nФИО: {data['fullname']}\nОтдел: {data['department']}\nТел: {data['phone']}\nДР: {data['birth_date']}",
-                reply_markup=get_reg_approval_kb(new_user.tg_id)
-            )
+            if message.photo:
+                await bot.send_photo(hr.tg_id, photo_id, caption=caption,
+                                     reply_markup=get_reg_approval_kb(new_user.tg_id))
+            else:
+                await bot.send_document(hr.tg_id, photo_id, caption=caption,
+                                        reply_markup=get_reg_approval_kb(new_user.tg_id))
         await session.commit()
 
     await state.clear()
-    text = "Анкета отправлена на проверку." if data['language_code'] == 'ru' else "Anketa tekshirishga yuborildi."
+    text = "Анкета отправлена на проверку." if data.get('language_code') == 'ru' else "Anketa tekshirishga yuborildi."
     await message.answer(text)
+
+@router.message(RegStates.face_id_photo)
+async def invalid_reg_photo(message: Message):
+    await message.answer("Ошибка: формат не поддерживается. Принимаются только файлы форматов JPG или PNG.")

@@ -27,6 +27,7 @@ class CustomCalendar:
         return await self._get_days_kb(year or today.year, month or today.month)
 
     async def _get_days_kb(self, year: int, month: int) -> InlineKeyboardMarkup:
+        today = date.today()
         async with async_session() as session:
             result = await session.execute(
                 select(Holiday.date).where(Holiday.date >= date(year, month, 1),
@@ -47,8 +48,19 @@ class CustomCalendar:
                 if day == 0:
                     b.button(text=" ", callback_data=CalCB(act="ig", y=0, m=0, d=0))
                 else:
-                    is_holiday = date(year, month, day) in holidays
-                    text_display = f"[{day}]" if is_holiday else str(day)
+                    current_date = date(year, month, day)
+                    is_today = current_date == today
+                    is_holiday = current_date in holidays
+
+                    if is_today and is_holiday:
+                        text_display = f"🟢🟠 {day}"
+                    elif is_today:
+                        text_display = f"🟢 {day}"
+                    elif is_holiday:
+                        text_display = f"🟠 {day}"
+                    else:
+                        text_display = str(day)
+
                     b.button(text=text_display, callback_data=CalCB(act="day", y=year, m=month, d=day))
         b.adjust(3, 7, 7, 7, 7, 7, 7)
         return b.as_markup()

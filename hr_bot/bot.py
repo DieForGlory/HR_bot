@@ -25,7 +25,9 @@ async def main():
     bot = Bot(token=config.bot_token.get_secret_value())
     dp = Dispatcher()
 
-    dp.message.outer_middleware(AuthMiddleware())
+    auth_mw = AuthMiddleware()
+    dp.message.outer_middleware(auth_mw)
+    dp.callback_query.outer_middleware(auth_mw)
 
     dp.include_router(registration.router)
     dp.include_router(admin.router)

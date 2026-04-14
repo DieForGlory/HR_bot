@@ -220,6 +220,7 @@ async def cmd_admin_help(message: Message, user: User):
     help_text = (
         "🛠 **Панель команд администратора (HR)**\n\n"
         "**Организационная структура:**\n"
+        "• `/users` — Получить список всех сотрудников и их TG ID (нажми на ID для копирования).\n"
         "• `/add_dept <Название>` — Создать новое подразделение.\n"
         "• `/link_dept <ID_Дочернего> <ID_Родительского>` — Установить подчинение отделов.\n"
         "• `/set_head <ID_Подразделения> <TG_ID_Руководителя>` — Назначить руководителя отдела.\n"
@@ -234,3 +235,31 @@ async def cmd_admin_help(message: Message, user: User):
     )
 
     await message.answer(help_text, parse_mode="Markdown")
+
+
+@router.message(Command("users"))
+async def cmd_users(message: Message, user: User):
+    if user.role != "hr":
+        return
+
+    async with async_session() as session:
+        res = await session.execute(select(User).where(User.is_active == True))
+        users = res.scalars().all()
+
+    if not users:
+        return await message.answer("Нет активных сотрудников.")
+
+    lines = ["👥 <b>Список сотрудников:</b>\n"]
+    for u in users:
+        dept = f"Отдел ID: {u.department_id}" if u.department_id else "Без отдела"
+        # Тег <code> позволяет скопировать ID по клику в Telegram
+        lines.append(f"• {u.fullname} | {dept} | TG ID: <code>{u.tg_id}</code>")
+
+    text = "\n".join(lines)
+
+    # Разбивка сообщения, если текст превышает лимит Telegram (4096 символов)
+    if len(text) > 4000:
+        for x in range(0, len(text), 4000):
+            await message.answer(text[x:x + 4000], parse_mode="HTML")
+    else:
+        await message.answer(text, parse_mode="HTML")

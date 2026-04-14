@@ -41,7 +41,7 @@ async def process_sick_date_cal(callback: CallbackQuery, callback_data: CalCB, s
     if selected:
         await state.update_data(date=date_obj)
         await state.set_state(SickLeaveStates.waiting_for_doc)
-        await callback.message.answer("Загрузите фото справки или PDF-документ:")
+        await callback.message.answer("Загрузите фото справки (только JPG или PNG):")
 
 
 @router.message(SickLeaveStates.waiting_for_doc, F.text)
@@ -50,9 +50,11 @@ async def back_sick_doc(message: Message, state: FSMContext, user: User):
         await state.set_state(SickLeaveStates.waiting_for_date)
         await message.answer("Выберите дату начала:",
                              reply_markup=await CustomCalendar(user.language_code).start_calendar())
+    else:
+        await message.answer("Пожалуйста, отправьте файл (JPG/PNG) или нажмите кнопку 'Назад'.")
 
 
-@router.message(SickLeaveStates.waiting_for_doc, F.photo | F.document)
+@router.message(SickLeaveStates.waiting_for_doc, F.photo | F.document.mime_type.in_(["image/jpeg", "image/png"]))
 async def process_sick_doc(message: Message, state: FSMContext, user: User, bot: Bot):
     data = await state.get_data()
     file_id = message.photo[-1].file_id if message.photo else message.document.file_id
@@ -79,3 +81,8 @@ async def process_sick_doc(message: Message, state: FSMContext, user: User, bot:
 
     await state.clear()
     await message.answer("Данные переданы.", reply_markup=main_menu_kb(user.language_code))
+
+
+@router.message(SickLeaveStates.waiting_for_doc)
+async def invalid_sick_doc(message: Message):
+    await message.answer("Ошибка: данный формат не поддерживается. Принимаются только JPG или PNG.")
