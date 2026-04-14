@@ -1,7 +1,8 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from aiogram.fsm.state import default_state
+from aiogram.fsm.state import default_state, State, StatesGroup
+from aiogram.fsm.context import FSMContext
 from hr_bot.keyboards.main_menu import main_menu_kb
 from hr_bot.database.models import User, Request
 from hr_bot.locales.texts import MESSAGES
@@ -11,6 +12,12 @@ from hr_bot.utils.logger import log_action
 from sqlalchemy import update, select
 
 router = Router()
+
+
+class ProfileStates(StatesGroup):
+    waiting_for_car = State()
+    waiting_for_phone = State()
+    waiting_for_photo = State()
 
 
 @router.message(CommandStart())
@@ -82,6 +89,63 @@ async def cmd_history(message: Message, user: User):
         lines.append(f"[{r.id}] {r.type.upper()} | {date_str} | Статус: {r.status}")
 
     await message.answer("\n".join(lines))
+
+
+@router.message(Command("profile"))
+async def cmd_profile(message: Message, user: User):
+    text = f"👤 Ваш профиль:\nФИО: {user.fullname}\nОтдел: {user.department}\nТелефон: {user.phone}\nАвто: {user.car_info}"
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚗 Изменить авто", callback_data="edit_car")],
+        [InlineKeyboardButton(text="📱 Изменить телефон", callback_data="edit_phone")],
+        [InlineKeyboardButton(text="📸 Обновить Face ID", callback_data="edit_photo")]
+    ])
+    await message.answer(text, reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("edit_"))
+async def edit_profile(callback: CallbackQuery, state: FSMContext):
+    action = callback.data.split("_")[1]
+    if action == "car":
+        await state.set_state(ProfileStates.waiting_for_car)
+        await callback.message.answer("Введите новые данные автомобиля (марка, госномер):")
+    elif action == "phone":
+        await state.set_state(ProfileStates.waiting_for_phone)
+        await callback.message.answer("Введите новый номер телефона:")
+    elif action == "photo":
+        await state.set_state(ProfileStates.waiting_for_photo)
+        await callback.message.answer("Загрузите новое фото:")
+    await callback.answer()
+
+
+@router.message(ProfileStates.waiting_for_car)
+async def save_car(message: Message, state: FSMContext, user: User):
+    async with async_session() as session:
+        await session.execute(update(User).where(User.id == user.id).values(car_info=message.text))
+        await log_action(session, user.id, "Обновлен автомобиль")
+        await session.commit()
+    await state.clear()
+    await message.answer("Данные автомобиля обновлены.")
+
+
+@router.message(ProfileStates.waiting_for_phone)
+async def save_phone(message: Message, state: FSMContext, user: User):
+    async with async_session() as session:
+        await session.execute(update(User).where(User.id == user.id).values(phone=message.text))
+        await log_action(session, user.id, "Обновлен телефон")
+        await session.commit()
+    await state.clear()
+    await message.answer("Номер телефона обновлен.")
+
+
+@router.message(ProfileStates.waiting_for_photo, F.photo)
+async def save_photo(message: Message, state: FSMContext, user: User):
+    photo_id = message.photo[-1].file_id
+    async with async_session() as session:
+        await session.execute(update(User).where(User.id == user.id).values(face_id_photo=photo_id))
+        await log_action(session, user.id, "Обновлено фото Face ID")
+        await session.commit()
+    await state.clear()
+    await message.answer("Фото Face ID обновлено.")
 
 
 @router.callback_query(CalCB.filter(), default_state)

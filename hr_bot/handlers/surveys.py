@@ -24,9 +24,8 @@ async def list_surveys(message: Message, user: User):
         return await message.answer("На данный момент активных опросов нет.")
 
     for s in surveys:
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Пройти опрос", callback_data=f"survey_{s.id}")]
-        ])
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="Пройти опрос", callback_data=f"survey_{s.id}")]])
         await message.answer(f"📋 {s.title}\n{s.description}", reply_markup=kb)
 
 
@@ -52,22 +51,18 @@ async def process_answer(message: Message, state: FSMContext, user: User):
     q_ids = data['questions']
     idx = data['current_idx']
 
-    # Сохраняем текущий ответ
     data['answers'].append({'question_id': q_ids[idx], 'answer': message.text})
 
     if idx + 1 < len(q_ids):
-        # Следующий вопрос
         async with async_session() as session:
             q = await session.get(SurveyQuestion, q_ids[idx + 1])
         await state.update_data(current_idx=idx + 1, answers=data['answers'])
         await message.answer(f"Вопрос {idx + 2}: {q.text}")
     else:
-        # Сохранение всех ответов в БД
         async with async_session() as session:
             for ans in data['answers']:
                 session.add(SurveyAnswer(user_id=user.id, question_id=ans['question_id'], answer=ans['answer']))
             await session.commit()
-
         await state.clear()
         await message.answer("Спасибо! Ваши ответы записаны.")
 
@@ -100,7 +95,7 @@ async def survey_desc(message: Message, state: FSMContext):
 
 
 @router.message(CreateSurveyStates.questions)
-async def survey_qs(message: Message, state: FSMContext):
+async def survey_qs(message: Message, state: FSMContext, bot: Bot):
     questions_list = [q.strip() for q in message.text.split('\n') if q.strip()]
     data = await state.get_data()
 
@@ -111,10 +106,22 @@ async def survey_qs(message: Message, state: FSMContext):
 
         for text in questions_list:
             session.add(SurveyQuestion(survey_id=survey.id, text=text))
+
+        users_res = await session.execute(select(User).where(User.is_active == True))
+        for u in users_res.scalars():
+            if u.id == message.from_user.id: continue
+            try:
+                kb = InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(text="Пройти опрос", callback_data=f"survey_{survey.id}")]])
+                await bot.send_message(u.tg_id, f"📊 Новый опрос!\n<b>{survey.title}</b>\n{survey.description}",
+                                       reply_markup=kb, parse_mode="HTML")
+            except Exception:
+                pass
+
         await session.commit()
 
     await state.clear()
-    await message.answer("Опрос успешно создан и активен.")
+    await message.answer("Опрос успешно создан и разослан сотрудникам.")
 
 
 @router.message(Command("survey_results"))

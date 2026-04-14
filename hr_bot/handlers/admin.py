@@ -10,6 +10,7 @@ from hr_bot.database.models import Holiday
 from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
 from aiogram.types import CallbackQuery, Message
 from hr_bot.utils.logger import log_action
+from hr_bot.database.models import Department
 
 router = Router()
 
@@ -143,3 +144,69 @@ async def cmd_set_manager(message: Message, user: User):
         await session.commit()
 
     await message.answer(f"Сотрудник {emp.fullname} привязан к руководителю {mgr.fullname}.")
+
+
+@router.message(Command("add_dept"))
+async def cmd_add_dept(message: Message, user: User):
+    if user.role != "hr": return
+    name = message.text.replace("/add_dept", "").strip()
+    if not name: return await message.answer("Формат: /add_dept <Название>")
+    async with async_session() as session:
+        session.add(Department(name=name))
+        await log_action(session, user.id, f"Создано подразделение: {name}")
+        await session.commit()
+    await message.answer("Подразделение создано.")
+
+
+@router.message(Command("link_dept"))
+async def cmd_link_dept(message: Message, user: User):
+    if user.role != "hr": return
+    try:
+        parts = message.text.split()
+        child_id, parent_id = int(parts[1]), int(parts[2])
+    except (IndexError, ValueError):
+        return await message.answer("Формат: /link_dept <ID_Дочернего> <ID_Родительского>")
+
+    async with async_session() as session:
+        await session.execute(update(Department).where(Department.id == child_id).values(parent_id=parent_id))
+        await log_action(session, user.id, f"Подразделение {child_id} подчинено {parent_id}")
+        await session.commit()
+    await message.answer("Связь иерархии установлена.")
+
+
+@router.message(Command("set_head"))
+async def cmd_set_head(message: Message, user: User):
+    if user.role != "hr": return
+    try:
+        parts = message.text.split()
+        dept_id, tg_id = int(parts[1]), int(parts[2])
+    except (IndexError, ValueError):
+        return await message.answer("Формат: /set_head <ID_Подразделения> <TG_ID_Руководителя>")
+
+    async with async_session() as session:
+        target_user = await session.execute(select(User).where(User.tg_id == tg_id))
+        usr = target_user.scalar_one_or_none()
+        if not usr: return await message.answer("Пользователь не найден.")
+
+        await session.execute(update(Department).where(Department.id == dept_id).values(head_id=usr.id))
+        await session.execute(update(User).where(User.id == usr.id).values(department_id=dept_id))
+        await log_action(session, user.id, f"Пользователь {usr.id} назначен главой отдела {dept_id}")
+        await session.commit()
+    await message.answer("Руководитель назначен.")
+
+
+@router.message(Command("structure"))
+async def cmd_structure(message: Message, user: User):
+    if user.role != "hr": return
+    async with async_session() as session:
+        depts = await session.execute(select(Department))
+        dept_list = depts.scalars().all()
+        users_res = await session.execute(select(User))
+        users = {u.id: u for u in users_res.scalars().all()}
+
+    out = []
+    for d in dept_list:
+        head_name = users[d.head_id].fullname if d.head_id and d.head_id in users else "Отсутствует"
+        parent = f" | Родитель: {d.parent_id}" if d.parent_id else " | (Корневое)"
+        out.append(f"[ID: {d.id}] {d.name} | Глава: {head_name}{parent}")
+    await message.answer("\n".join(out) if out else "Структура не задана.")

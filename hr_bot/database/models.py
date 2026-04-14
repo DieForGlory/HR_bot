@@ -3,10 +3,15 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from datetime import date, datetime
 from typing import List
 
-
 class Base(DeclarativeBase):
     pass
 
+class Department(Base):
+    __tablename__ = "departments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True)
+    parent_id: Mapped[int] = mapped_column(Integer, nullable=True)
+    head_id: Mapped[int] = mapped_column(Integer, nullable=True)
 
 class User(Base):
     __tablename__ = "users"
@@ -14,7 +19,7 @@ class User(Base):
     tg_id: Mapped[int] = mapped_column(BigInteger, unique=True)
     fullname: Mapped[str] = mapped_column(String(255))
     username: Mapped[str] = mapped_column(String(255), nullable=True)
-    department: Mapped[str] = mapped_column(String(255), nullable=True)
+    department_id: Mapped[int] = mapped_column(Integer, nullable=True)
     position: Mapped[str] = mapped_column(String(255), nullable=True)
     phone: Mapped[str] = mapped_column(String(20), unique=True)
     birth_date: Mapped[str] = mapped_column(String(50), nullable=True)
@@ -23,11 +28,9 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(50), default="employee")
     language_code: Mapped[str] = mapped_column(String(2), default="ru")
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
-
     manager_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)
     vacation_total: Mapped[int] = mapped_column(Integer, default=28)
     vacation_used: Mapped[int] = mapped_column(Integer, default=0)
-
 
 class Request(Base):
     __tablename__ = "requests"
@@ -40,7 +43,6 @@ class Request(Base):
     comment: Mapped[str] = mapped_column(String(500), nullable=True)
     file_id: Mapped[str] = mapped_column(String(255), nullable=True)
 
-
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -48,7 +50,6 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(255))
     details: Mapped[str] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-
 
 class Survey(Base):
     __tablename__ = "surveys"
@@ -58,7 +59,6 @@ class Survey(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     questions: Mapped[List["SurveyQuestion"]] = relationship(back_populates="survey")
 
-
 class SurveyQuestion(Base):
     __tablename__ = "survey_questions"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -66,14 +66,12 @@ class SurveyQuestion(Base):
     text: Mapped[str] = mapped_column(Text)
     survey: Mapped["Survey"] = relationship(back_populates="questions")
 
-
 class SurveyAnswer(Base):
     __tablename__ = "survey_answers"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     question_id: Mapped[int] = mapped_column(ForeignKey("survey_questions.id"))
     answer: Mapped[str] = mapped_column(Text)
-
 
 class Holiday(Base):
     __tablename__ = "holidays"

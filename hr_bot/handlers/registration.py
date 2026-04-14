@@ -11,6 +11,8 @@ from hr_bot.keyboards.main_menu import main_menu_kb
 from hr_bot.locales.texts import MESSAGES
 from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
 from sqlalchemy import select
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from hr_bot.database.models import Department
 
 router = Router()
 
@@ -53,14 +55,41 @@ async def reg_lang(message: Message, state: FSMContext):
 @router.message(RegStates.fullname)
 async def reg_name(message: Message, state: FSMContext):
     parts = message.text.strip().split()
-    if len(parts) < 2:
-        return await message.answer("Ошибка. Требуется минимум Фамилия и Имя.")
-
+    if len(parts) < 2: return await message.answer("Ошибка. Требуется минимум Фамилия и Имя.")
     fullname = f"{parts[0]} {parts[1]} {parts[2] if len(parts) > 2 else 'XXX'}"
     await state.update_data(fullname=fullname)
-    await state.set_state(RegStates.department)
-    await message.answer("Укажите Управление/Отдел:")
 
+    async with async_session() as session:
+        depts = await session.execute(select(Department))
+        dept_list = depts.scalars().all()
+
+    if not dept_list:
+        await state.set_state(RegStates.department)
+        return await message.answer("Введите ID отдела текстом (база пуста):")
+
+    kb = InlineKeyboardBuilder()
+    for d in dept_list:
+        kb.button(text=d.name, callback_data=f"rdept_{d.id}")
+    kb.adjust(1)
+    await state.set_state(RegStates.department)
+    await message.answer("Выберите подразделение:", reply_markup=kb.as_markup())
+
+@router.callback_query(F.data.startswith("rdept_"), RegStates.department)
+async def reg_dept_cb(callback: CallbackQuery, state: FSMContext):
+    dept_id = int(callback.data.split("_")[1])
+    await state.update_data(department_id=dept_id)
+    await state.set_state(RegStates.position)
+    await callback.message.answer("Укажите должность:")
+    await callback.answer()
+
+@router.message(RegStates.department)
+async def reg_dept_text(message: Message, state: FSMContext):
+    try:
+        await state.update_data(department_id=int(message.text))
+    except ValueError:
+        return await message.answer("Ожидается числовой ID отдела.")
+    await state.set_state(RegStates.position)
+    await message.answer("Укажите должность:")
 
 @router.message(RegStates.department)
 async def reg_dept(message: Message, state: FSMContext):
@@ -130,7 +159,7 @@ async def reg_photo(message: Message, state: FSMContext, bot: Bot):
             tg_id=message.from_user.id,
             fullname=data['fullname'],
             username=message.from_user.username,
-            department=data['department'],
+            department_id=data.get('department_id'),
             position=data['position'],
             phone=data['phone'],
             birth_date=data['birth_date'],
