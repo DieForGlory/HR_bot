@@ -113,7 +113,7 @@ async def edit_profile(callback: CallbackQuery, state: FSMContext):
         await callback.message.answer("Введите новый номер телефона:")
     elif action == "photo":
         await state.set_state(ProfileStates.waiting_for_photo)
-        await callback.message.answer("Загрузите новое фото:")
+        await callback.message.answer("Загрузите новое фото (только JPG/PNG):")
     await callback.answer()
 
 
@@ -137,15 +137,19 @@ async def save_phone(message: Message, state: FSMContext, user: User):
     await message.answer("Номер телефона обновлен.")
 
 
-@router.message(ProfileStates.waiting_for_photo, F.photo)
+@router.message(ProfileStates.waiting_for_photo, F.photo | F.document.mime_type.in_(["image/jpeg", "image/png"]))
 async def save_photo(message: Message, state: FSMContext, user: User):
-    photo_id = message.photo[-1].file_id
+    photo_id = message.photo[-1].file_id if message.photo else message.document.file_id
     async with async_session() as session:
         await session.execute(update(User).where(User.id == user.id).values(face_id_photo=photo_id))
         await log_action(session, user.id, "Обновлено фото Face ID")
         await session.commit()
     await state.clear()
     await message.answer("Фото Face ID обновлено.")
+
+@router.message(ProfileStates.waiting_for_photo)
+async def invalid_profile_photo(message: Message):
+    await message.answer("Ошибка: формат не поддерживается. Принимаются только файлы форматов JPG или PNG.")
 
 
 @router.callback_query(CalCB.filter(), default_state)
