@@ -1,9 +1,10 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart
 from aiogram.types import Message
-from keyboards.main_menu import main_menu_kb
-from database.models import User
-from locales.texts import MESSAGES
+from hr_bot.keyboards.main_menu import main_menu_kb
+from hr_bot.database.models import User
+from hr_bot.locales.texts import MESSAGES
+from hr_bot.utils.custom_calendar import CustomCalendar
 
 router = Router()
 
@@ -27,5 +28,4 @@ async def cmd_faq(message: Message, user: User):
 
 @router.message(F.text.in_(["📅 Календарь", "📅 Kalendar"]))
 async def cmd_calendar(message: Message):
-    # Ссылка на внешний ресурс или отправка документа
-    await message.answer("📅 [Производственный календарь 2026](https://example.com/calendar)")
+    await message.answer("Производственный календарь\n(Нерабочие дни выделены скобками []):", reply_markup=await CustomCalendar().start_calendar())

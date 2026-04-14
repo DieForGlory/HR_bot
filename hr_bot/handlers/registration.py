@@ -9,8 +9,8 @@ from hr_bot.database.models import User
 from hr_bot.keyboards.inline import get_reg_approval_kb
 from hr_bot.keyboards.main_menu import main_menu_kb
 from hr_bot.locales.texts import MESSAGES
+from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
 from sqlalchemy import select
-from aiogram_calendar import SimpleCalendar, SimpleCalendarCallback
 
 router = Router()
 
@@ -72,36 +72,25 @@ async def reg_phone(message: Message, state: FSMContext):
             phone = '+' + phone
     else:
         phone_clean = re.sub(r'\D', '', message.text)
-        is_ru = phone_clean.startswith(('7', '8')) and len(phone_clean) == 11
-        is_uz = phone_clean.startswith('998') and len(phone_clean) == 12
+        is_ru = (phone_clean.startswith(('7', '8')) and len(phone_clean) == 11)
+        is_uz = (phone_clean.startswith('998') and len(phone_clean) == 12)
 
         if not (is_ru or is_uz):
             return await message.answer("Ошибка формата. Ожидается номер РФ (+7...) или РУз (+998...).")
 
-        if is_ru and phone_clean.startswith('8'):
-            phone = "+7" + phone_clean[1:]
-        else:
-            phone = "+" + phone_clean
+        phone = f"+{phone_clean}" if not phone_clean.startswith('8') else f"+7{phone_clean[1:]}"
 
     await state.update_data(phone=phone)
     await state.set_state(RegStates.birth_date)
+    await message.answer("Выберите дату рождения:", reply_markup=await CustomCalendar().start_calendar())
 
-    await message.answer(
-        "Выберите дату рождения:",
-        reply_markup=await SimpleCalendar().start_calendar()
-    )
-
-@router.callback_query(SimpleCalendarCallback.filter(), RegStates.birth_date)
-async def process_calendar(callback_query: CallbackQuery, callback_data: SimpleCalendarCallback, state: FSMContext):
-    selected, date = await SimpleCalendar().process_selection(callback_query, callback_data)
-
+@router.callback_query(CalCB.filter(), RegStates.birth_date)
+async def process_calendar(callback_query: CallbackQuery, callback_data: CalCB, state: FSMContext):
+    selected, date_obj = await CustomCalendar().process_selection(callback_query, callback_data)
     if selected:
-        await state.update_data(birth_date=date.strftime("%d.%m.%Y"))
+        await state.update_data(birth_date=date_obj.strftime("%d.%m.%Y"))
         await state.set_state(RegStates.car_info)
-        await callback_query.message.answer(
-            "Укажите номер и марку автомобиля (или 'нет'):",
-            reply_markup=ReplyKeyboardRemove()
-        )
+        await callback_query.message.answer("Укажите номер и марку авто (или 'нет'):", reply_markup=ReplyKeyboardRemove())
 
 @router.message(RegStates.car_info)
 async def reg_car(message: Message, state: FSMContext):
@@ -135,13 +124,7 @@ async def reg_photo(message: Message, state: FSMContext, bot: Bot):
             await bot.send_photo(
                 hr.tg_id,
                 photo_id,
-                caption=f"📝 Новая заявка:\n"
-                        f"ФИО: {data['fullname']}\n"
-                        f"Отдел: {data['department']}\n"
-                        f"Должность: {data['position']}\n"
-                        f"Тел: {data['phone']}\n"
-                        f"Дата рождения: {data['birth_date']}\n"
-                        f"Авто: {data['car_info']}",
+                caption=f"📝 Новая заявка:\nФИО: {data['fullname']}\nОтдел: {data['department']}\nТел: {data['phone']}\nДР: {data['birth_date']}",
                 reply_markup=get_reg_approval_kb(new_user.tg_id)
             )
         await session.commit()

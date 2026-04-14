@@ -2,13 +2,13 @@ from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from database.engine import async_session
-from database.models import Request, User as DBUser
-from keyboards.main_menu import main_menu_kb, back_kb
-from keyboards.inline import get_approval_kb
-from locales.texts import MESSAGES
+from hr_bot.database.engine import async_session
+from hr_bot.database.models import Request, User as DBUser
+from hr_bot.keyboards.main_menu import main_menu_kb, back_kb
+from hr_bot.keyboards.inline import get_approval_kb
+from hr_bot.locales.texts import MESSAGES
+from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
 from sqlalchemy import select
-from aiogram_calendar import SimpleCalendar, SimpleCalendarCallback
 
 router = Router()
 
@@ -20,7 +20,7 @@ class VacationStates(StatesGroup):
 async def start_vacation(message: Message, state: FSMContext, user: DBUser):
     await state.set_state(VacationStates.waiting_for_start)
     await message.answer("Оформление отпуска.", reply_markup=back_kb(user.language_code))
-    await message.answer("Выберите дату начала:", reply_markup=await SimpleCalendar().start_calendar())
+    await message.answer("Выберите дату начала:", reply_markup=await CustomCalendar().start_calendar())
 
 @router.message(VacationStates.waiting_for_start, F.text)
 async def cancel_vac_start(message: Message, state: FSMContext, user: DBUser):
@@ -28,30 +28,30 @@ async def cancel_vac_start(message: Message, state: FSMContext, user: DBUser):
         await state.clear()
         await message.answer(MESSAGES[user.language_code]['main_menu'], reply_markup=main_menu_kb(user.language_code))
 
-@router.callback_query(SimpleCalendarCallback.filter(), VacationStates.waiting_for_start)
-async def process_vac_start_cal(callback: CallbackQuery, callback_data: SimpleCalendarCallback, state: FSMContext):
-    selected, date = await SimpleCalendar().process_selection(callback, callback_data)
+@router.callback_query(CalCB.filter(), VacationStates.waiting_for_start)
+async def process_vac_start_cal(callback: CallbackQuery, callback_data: CalCB, state: FSMContext):
+    selected, date_obj = await CustomCalendar().process_selection(callback, callback_data)
     if selected:
-        await state.update_data(start_date=date.date())
+        await state.update_data(start_date=date_obj)
         await state.set_state(VacationStates.waiting_for_end)
-        await callback.message.answer("Выберите дату окончания:", reply_markup=await SimpleCalendar().start_calendar())
+        await callback.message.answer("Выберите дату окончания:", reply_markup=await CustomCalendar().start_calendar())
 
 @router.message(VacationStates.waiting_for_end, F.text)
 async def back_vac_end(message: Message, state: FSMContext, user: DBUser):
     if message.text == MESSAGES[user.language_code]['back']:
         await state.set_state(VacationStates.waiting_for_start)
-        await message.answer("Выберите дату начала:", reply_markup=await SimpleCalendar().start_calendar())
+        await message.answer("Выберите дату начала:", reply_markup=await CustomCalendar().start_calendar())
 
-@router.callback_query(SimpleCalendarCallback.filter(), VacationStates.waiting_for_end)
-async def process_vac_end_cal(callback: CallbackQuery, callback_data: SimpleCalendarCallback, state: FSMContext, user: DBUser, bot: Bot):
-    selected, date = await SimpleCalendar().process_selection(callback, callback_data)
+@router.callback_query(CalCB.filter(), VacationStates.waiting_for_end)
+async def process_vac_end_cal(callback: CallbackQuery, callback_data: CalCB, state: FSMContext, user: DBUser, bot: Bot):
+    selected, date_obj = await CustomCalendar().process_selection(callback, callback_data)
     if selected:
         data = await state.get_data()
         start_date = data['start_date']
-        end_date = date.date()
+        end_date = date_obj
 
         if end_date <= start_date:
-            await callback.message.answer("Ошибка: Дата окончания должна быть позже даты начала.\nВыберите заново:", reply_markup=await SimpleCalendar().start_calendar())
+            await callback.message.answer("Ошибка: Дата окончания должна быть позже даты начала.\nВыберите заново:", reply_markup=await CustomCalendar().start_calendar())
             return
 
         async with async_session() as session:

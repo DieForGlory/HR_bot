@@ -57,3 +57,8 @@ class SurveyAnswer(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     question_id: Mapped[int] = mapped_column(ForeignKey("survey_questions.id"))
     answer: Mapped[str] = mapped_column(Text)
+
+class Holiday(Base):
+    __tablename__ = "holidays"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    date: Mapped[date] = mapped_column(Date, unique=True)

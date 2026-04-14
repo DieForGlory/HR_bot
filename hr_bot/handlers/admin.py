@@ -3,6 +3,11 @@ from aiogram.types import CallbackQuery
 from hr_bot.database.engine import async_session
 from hr_bot.database.models import Request, User
 from sqlalchemy import update, select
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from hr_bot.database.models import Holiday
+from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
 
 router = Router()
 
@@ -66,3 +71,39 @@ async def reject_reg(callback: CallbackQuery, bot: Bot):
 
     await bot.send_message(user_tg_id, "❌ Ваша заявка на регистрацию отклонена.")
     await callback.message.edit_caption(caption=callback.message.caption + "\n\n❌ Отклонено")
+
+
+class HolidayState(StatesGroup):
+    managing = State()
+
+
+@router.message(Command("manage_calendar"))
+async def manage_calendar(message: Message, user: User, state: FSMContext):
+    if user.role != "hr":
+        return
+    await state.set_state(HolidayState.managing)
+    await message.answer(
+        "Управление производственным календарем.\nНажмите на дату для добавления/удаления выходного дня (выделяются скобками []).",
+        reply_markup=await CustomCalendar().start_calendar())
+
+
+@router.callback_query(CalCB.filter(), HolidayState.managing)
+async def toggle_holiday(callback: CallbackQuery, callback_data: CalCB, state: FSMContext):
+    selected, date_obj = await CustomCalendar().process_selection(callback, callback_data)
+    if selected:
+        async with async_session() as session:
+            result = await session.execute(select(Holiday).where(Holiday.date == date_obj))
+            holiday = result.scalar_one_or_none()
+
+            if holiday:
+                await session.delete(holiday)
+                status = "Удален из выходных"
+            else:
+                session.add(Holiday(date=date_obj))
+                status = "Добавлен в выходные"
+            await session.commit()
+
+        await callback.message.edit_text(
+            f"Статус изменен: {date_obj.strftime('%d.%m.%Y')} - {status}",
+            reply_markup=await CustomCalendar().start_calendar(date_obj.year, date_obj.month)
+        )
