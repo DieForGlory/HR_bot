@@ -9,6 +9,7 @@ from hr_bot.keyboards.main_menu import main_menu_kb, back_kb
 from hr_bot.keyboards.inline import get_approval_kb
 from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
 from hr_bot.utils.logger import log_action
+from hr_bot.utils.hierarchy import get_manager_tg_id
 from sqlalchemy import select
 
 router = Router()
@@ -71,14 +72,7 @@ async def confirm_dayoff(callback: CallbackQuery, state: FSMContext, user: User,
 
         await log_action(session, user.id, f"Создана заявка на отгул (ID: {new_request.id})")
 
-        targets = []
-        if user.manager_id:
-            mgr = await session.get(User, user.manager_id)
-            if mgr: targets.append(mgr.tg_id)
-
-        if not targets:
-            hrs = await session.execute(select(User).where(User.role == "hr"))
-            targets = [hr.tg_id for hr in hrs.scalars()]
+        targets = await get_manager_tg_id(session, user)
 
         for tg_id in targets:
             await bot.send_message(

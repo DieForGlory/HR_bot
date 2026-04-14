@@ -9,6 +9,7 @@ from hr_bot.keyboards.inline import get_approval_kb
 from hr_bot.locales.texts import MESSAGES
 from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
 from hr_bot.utils.logger import log_action
+from hr_bot.utils.hierarchy import get_manager_tg_id
 from sqlalchemy import select
 
 router = Router()
@@ -106,15 +107,7 @@ async def process_vac_end_cal(callback: CallbackQuery, callback_data: CalCB, sta
 
             await log_action(session, user.id, f"Создана заявка на отпуск (ID: {new_req.id})")
 
-            # Маршрутизация Руководителю, если назначен. Иначе — HR.
-            targets = []
-            if user.manager_id:
-                mgr = await session.get(DBUser, user.manager_id)
-                if mgr: targets.append(mgr.tg_id)
-
-            if not targets:
-                hrs = await session.execute(select(DBUser).where(DBUser.role == "hr"))
-                targets = [hr.tg_id for hr in hrs.scalars()]
+            targets = await get_manager_tg_id(session, user)
 
             for tg_id in targets:
                 await bot.send_message(tg_id,
