@@ -20,7 +20,7 @@ class DayOffStates(StatesGroup):
 async def start_day_off(message: Message, state: FSMContext, user: User):
     await state.set_state(DayOffStates.waiting_for_date)
     await message.answer("Оформление отгула.", reply_markup=back_kb(user.language_code))
-    await message.answer("Выберите дату:", reply_markup=await CustomCalendar().start_calendar())
+    await message.answer("Выберите дату:", reply_markup=await CustomCalendar(user.language_code).start_calendar())
 
 @router.message(DayOffStates.waiting_for_date, F.text)
 async def cancel_date(message: Message, state: FSMContext, user: User):
@@ -30,7 +30,7 @@ async def cancel_date(message: Message, state: FSMContext, user: User):
 
 @router.callback_query(CalCB.filter(), DayOffStates.waiting_for_date)
 async def process_date_cal(callback: CallbackQuery, callback_data: CalCB, state: FSMContext):
-    selected, date_obj = await CustomCalendar().process_selection(callback, callback_data)
+    selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback, callback_data)
     if selected:
         await state.update_data(date=date_obj)
         await state.set_state(DayOffStates.waiting_for_comment)
@@ -40,7 +40,7 @@ async def process_date_cal(callback: CallbackQuery, callback_data: CalCB, state:
 async def process_comment(message: Message, state: FSMContext, user: User, bot: Bot):
     if message.text == MESSAGES[user.language_code]['back']:
         await state.set_state(DayOffStates.waiting_for_date)
-        return await message.answer("Выберите дату:", reply_markup=await CustomCalendar().start_calendar())
+        return await message.answer("Выберите дату:", reply_markup=await CustomCalendar(user.language_code).start_calendar())
 
     data = await state.get_data()
     async with async_session() as session:

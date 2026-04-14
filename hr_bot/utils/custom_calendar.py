@@ -6,7 +6,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from hr_bot.database.engine import async_session
 from hr_bot.database.models import Holiday
 from sqlalchemy import select
-
+from hr_bot.locales.texts import MESSAGES
 
 class CalCB(CallbackData, prefix="ccal"):
     act: str
@@ -16,8 +16,10 @@ class CalCB(CallbackData, prefix="ccal"):
 
 
 class CustomCalendar:
-    def __init__(self):
-        self.months = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+    def __init__(self, lang: str = 'ru'):
+        self.lang = lang if lang in MESSAGES else 'ru'
+        self.months = MESSAGES[self.lang]['months']
+        self.days = MESSAGES[self.lang]['days']
 
     async def start_calendar(self, year: int = None, month: int = None) -> InlineKeyboardMarkup:
         today = date.today()
@@ -26,10 +28,7 @@ class CustomCalendar:
     async def _get_days_kb(self, year: int, month: int) -> InlineKeyboardMarkup:
         async with async_session() as session:
             result = await session.execute(
-                select(Holiday.date).where(
-                    Holiday.date >= date(year, month, 1),
-                    Holiday.date <= date(year, month, calendar.monthrange(year, month)[1])
-                )
+                select(Holiday.date).where(Holiday.date >= date(year, month, 1), Holiday.date <= date(year, month, calendar.monthrange(year, month)[1]))
             )
             holidays = {row[0] for row in result.all()}
 
@@ -38,7 +37,7 @@ class CustomCalendar:
         b.button(text=f"{self.months[month - 1]} {year}", callback_data=CalCB(act="s_m", y=year, m=month, d=1))
         b.button(text=">", callback_data=CalCB(act="n_m", y=year, m=month, d=1))
 
-        for day in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]:
+        for day in self.days:
             b.button(text=day, callback_data=CalCB(act="ig", y=0, m=0, d=0))
 
         for week in calendar.monthcalendar(year, month):

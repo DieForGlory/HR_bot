@@ -8,13 +8,15 @@ MESSAGES = {
         'question_hr': "❓ Вопрос HR",
         'faq': "📚 FAQ",
         'calendar': "📅 Календарь",
-        'onboarding': "🚀 Онбординг", # Новое
-        'surveys': "📊 Опросы",         # Новое
+        'onboarding': "🚀 Онбординг",
+        'surveys': "📊 Опросы",
         'back': "⬅️ Назад",
         'enter_date': "Введите дату (ГГГГ-ММ-ДД):",
         'request_sent': "Заявка отправлена на согласование.",
         'approved': "✅ Ваша заявка одобрена!",
         'rejected': "❌ Ваша заявка отклонена.",
+        'months': ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"],
+        'days': ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
     },
     'uz': {
         'main_menu': "Harakatni tanlang:",
@@ -25,12 +27,14 @@ MESSAGES = {
         'question_hr': "❓ HRga savol",
         'faq': "📚 Savol-javob",
         'calendar': "📅 Kalendar",
-        'onboarding': "🚀 Onbording", # Yangi
-        'surveys': "📊 So'rovnomalar", # Yangi
+        'onboarding': "🚀 Onbording",
+        'surveys': "📊 So'rovnomalar",
         'back': "⬅️ Orqaga",
         'enter_date': "Sanani kiriting (YYYY-AA-KK):",
         'request_sent': "So'rov tasdiqlash uchun yuborildi.",
         'approved': "✅ Sizning so'rovingiz tasdiqlandi!",
         'rejected': "❌ Sizning so'rovingiz rad etildi.",
+        'months': ["Yan", "Fev", "Mar", "Apr", "May", "Iyun", "Iyul", "Avg", "Sen", "Okt", "Noy", "Dek"],
+        'days': ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
     }
 }

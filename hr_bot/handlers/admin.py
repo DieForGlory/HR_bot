@@ -24,6 +24,14 @@ async def approve_request(callback: CallbackQuery, bot: Bot):
 
         req, user = data
         await session.execute(update(Request).where(Request.id == request_id).values(status="approved"))
+
+        if req.type == "vacation":
+            days = (req.end_date - req.start_date).days + 1
+            await session.execute(
+                update(User).where(User.id == user.id).values(vacation_used=User.vacation_used + days))
+
+        await log_action(session, user.id, f"Заявка {request_id} ({req.type}) одобрена",
+                         details=f"Одобрено: tg_id {callback.from_user.id}")
         await session.commit()
 
     await bot.send_message(user.tg_id, f"✅ Ваша заявка на {req.type} ({req.start_date}) одобрена!")
@@ -40,6 +48,9 @@ async def reject_request(callback: CallbackQuery, bot: Bot):
 
         req, user = data
         await session.execute(update(Request).where(Request.id == request_id).values(status="rejected"))
+        await log_action(session, user.id, f"Заявка {request_id} ({req.type}) отклонена",
+                         details=f"Отклонено: tg_id {callback.from_user.id}")
+        await session.commit()
         await session.commit()
 
     await bot.send_message(user.tg_id, f"❌ Ваша заявка на {req.type} ({req.start_date}) отклонена.")
@@ -84,12 +95,12 @@ async def manage_calendar(message: Message, user: User, state: FSMContext):
     await state.set_state(HolidayState.managing)
     await message.answer(
         "Управление производственным календарем.\nНажмите на дату для добавления/удаления выходного дня (выделяются скобками []).",
-        reply_markup=await CustomCalendar().start_calendar())
+        reply_markup=await CustomCalendar(user.language_code).start_calendar())
 
 
 @router.callback_query(CalCB.filter(), HolidayState.managing)
 async def toggle_holiday(callback: CallbackQuery, callback_data: CalCB, state: FSMContext):
-    selected, date_obj = await CustomCalendar().process_selection(callback, callback_data)
+    selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback, callback_data)
     if selected:
         async with async_session() as session:
             result = await session.execute(select(Holiday).where(Holiday.date == date_obj))
@@ -105,5 +116,5 @@ async def toggle_holiday(callback: CallbackQuery, callback_data: CalCB, state: F
 
         await callback.message.edit_text(
             f"Статус изменен: {date_obj.strftime('%d.%m.%Y')} - {status}",
-            reply_markup=await CustomCalendar().start_calendar(date_obj.year, date_obj.month)
+            reply_markup=await CustomCalendar(user.language_code).start_calendar(date_obj.year, date_obj.month)
         )

@@ -82,11 +82,11 @@ async def reg_phone(message: Message, state: FSMContext):
 
     await state.update_data(phone=phone)
     await state.set_state(RegStates.birth_date)
-    await message.answer("Выберите дату рождения:", reply_markup=await CustomCalendar().start_calendar())
+    await message.answer("Выберите дату рождения:", reply_markup=await CustomCalendar(user.language_code).start_calendar())
 
 @router.callback_query(CalCB.filter(), RegStates.birth_date)
 async def process_calendar(callback_query: CallbackQuery, callback_data: CalCB, state: FSMContext):
-    selected, date_obj = await CustomCalendar().process_selection(callback_query, callback_data)
+    selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback_query, callback_data)
     if selected:
         await state.update_data(birth_date=date_obj.strftime("%d.%m.%Y"))
         await state.set_state(RegStates.car_info)

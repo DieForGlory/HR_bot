@@ -20,7 +20,7 @@ class SickLeaveStates(StatesGroup):
 async def start_sick_leave(message: Message, state: FSMContext, user: User):
     await state.set_state(SickLeaveStates.waiting_for_date)
     await message.answer("Оформление больничного.", reply_markup=back_kb(user.language_code))
-    await message.answer("Выберите дату начала:", reply_markup=await CustomCalendar().start_calendar())
+    await message.answer("Выберите дату начала:", reply_markup=await CustomCalendar(user.language_code).start_calendar())
 
 @router.message(SickLeaveStates.waiting_for_date, F.text)
 async def cancel_sick_date(message: Message, state: FSMContext, user: User):
@@ -30,7 +30,7 @@ async def cancel_sick_date(message: Message, state: FSMContext, user: User):
 
 @router.callback_query(CalCB.filter(), SickLeaveStates.waiting_for_date)
 async def process_sick_date_cal(callback: CallbackQuery, callback_data: CalCB, state: FSMContext):
-    selected, date_obj = await CustomCalendar().process_selection(callback, callback_data)
+    selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback, callback_data)
     if selected:
         await state.update_data(date=date_obj)
         await state.set_state(SickLeaveStates.waiting_for_doc)
@@ -40,7 +40,7 @@ async def process_sick_date_cal(callback: CallbackQuery, callback_data: CalCB, s
 async def back_sick_doc(message: Message, state: FSMContext, user: User):
     if message.text == MESSAGES[user.language_code]['back']:
         await state.set_state(SickLeaveStates.waiting_for_date)
-        await message.answer("Выберите дату начала:", reply_markup=await CustomCalendar().start_calendar())
+        await message.answer("Выберите дату начала:", reply_markup=await CustomCalendar(user.language_code).start_calendar())
 
 @router.message(SickLeaveStates.waiting_for_doc, F.photo | F.document)
 async def process_sick_doc(message: Message, state: FSMContext, user: User, bot: Bot):
