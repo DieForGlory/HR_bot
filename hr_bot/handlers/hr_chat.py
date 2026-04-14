@@ -2,12 +2,11 @@ from aiogram import Router, F, Bot
 from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from database.engine import async_session
-from database.models import User
-from locales.texts import MESSAGES
-from keyboards.main_menu import main_menu_kb, back_kb
 from sqlalchemy import select
-
+from hr_bot.database.engine import async_session
+from hr_bot.database.models import User
+from hr_bot.locales.texts import MESSAGES
+from hr_bot.keyboards.main_menu import main_menu_kb, back_kb
 router = Router()
 
 class HRQuestion(StatesGroup):

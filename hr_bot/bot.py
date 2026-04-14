@@ -2,12 +2,11 @@ import asyncio
 import logging
 import aiohttp
 from aiogram import Bot, Dispatcher
-from config import config
-from handlers import common, requests, sick_leave, admin, vacation, hr_chat, certificates, onboarding, surveys,registration # Добавлены onboarding и surveys
-from middlewares.auth import AuthMiddleware
-from database.engine import engine
-from database.models import Base
-
+from hr_bot.config import config
+from hr_bot.handlers import common, requests, sick_leave, admin, vacation, hr_chat, certificates, onboarding, surveys, registration
+from hr_bot.middlewares.auth import AuthMiddleware
+from hr_bot.database.engine import engine
+from hr_bot.database.models import Base
 
 
 # Ваш SSL PATCH

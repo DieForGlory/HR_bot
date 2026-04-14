@@ -8,6 +8,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from hr_bot.database.models import Holiday
 from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
+from aiogram.types import CallbackQuery, Message
+from hr_bot.utils.logger import log_action
 
 router = Router()
 
@@ -118,3 +120,26 @@ async def toggle_holiday(callback: CallbackQuery, callback_data: CalCB, state: F
             f"Статус изменен: {date_obj.strftime('%d.%m.%Y')} - {status}",
             reply_markup=await CustomCalendar(user.language_code).start_calendar(date_obj.year, date_obj.month)
         )
+
+
+@router.message(Command("set_manager"))
+async def cmd_set_manager(message: Message, user: User):
+    if user.role != "hr": return
+    parts = message.text.split()
+    if len(parts) != 3:
+        return await message.answer("Формат: /set_manager <ID_сотрудника_TG> <ID_руководителя_TG>")
+
+    emp_tg, mgr_tg = int(parts[1]), int(parts[2])
+    async with async_session() as session:
+        emp_res = await session.execute(select(User).where(User.tg_id == emp_tg))
+        mgr_res = await session.execute(select(User).where(User.tg_id == mgr_tg))
+        emp, mgr = emp_res.scalar_one_or_none(), mgr_res.scalar_one_or_none()
+
+        if not emp or not mgr:
+            return await message.answer("Пользователь не найден.")
+
+        emp.manager_id = mgr.id
+        await log_action(session, user.id, "Привязка руководителя", f"Сотрудник: {emp.id}, Руководитель: {mgr.id}")
+        await session.commit()
+
+    await message.answer(f"Сотрудник {emp.fullname} привязан к руководителю {mgr.fullname}.")

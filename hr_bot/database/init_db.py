@@ -1,7 +1,7 @@
-import asyncio
-from engine import engine, async_session
-from models import Base, User
 
+import asyncio
+from hr_bot.database.engine import engine, async_session
+from hr_bot.database.models import Base, User
 
 async def init_db():
     async with engine.begin() as conn:

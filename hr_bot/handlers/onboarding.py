@@ -1,30 +1,45 @@
 from aiogram import Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from database.models import User
-from locales.texts import MESSAGES
-
+from aiogram.filters import Command
+from hr_bot.database.engine import async_session
+from hr_bot.database.models import User, SystemConfig
+from sqlalchemy import select
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 router = Router()
 
 
 @router.message(F.text.in_(["🚀 Онбординг", "🚀 Onboarding"]))
 async def start_onboarding(message: Message, user: User):
-    welcome_text = (
-        "👋 Добро пожаловать в команду!\n\n"
-        "Здесь ты найдешь всё необходимое для успешного старта:\n"
-        "1. Структура компании\n"
-        "2. Правила внутреннего распорядка\n"
-        "3. Полезные ссылки и доступы"
-    ) if user.language_code == 'ru' else "Jamoaga xush kelibsiz!.."
+    async with async_session() as session:
+        res = await session.execute(select(SystemConfig).where(SystemConfig.key == "onboarding_text"))
+        config_obj = res.scalar_one_or_none()
+        text = config_obj.value if config_obj else "Базовый гайд: [ссылка отсутствует]"
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📖 Гайд новичка", url="https://example.com/handbook")],
         [InlineKeyboardButton(text="🗺 Карта офиса", callback_data="show_map")]
     ])
-
-    await message.answer(welcome_text, reply_markup=kb)
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "show_map")
-async def send_map(callback: Message):
-    await callback.message.answer("📍 Наш офис находится на 5 этаже. Твое место — в отделе аналитики.")
+async def send_map(callback: CallbackQuery):
+    await callback.message.answer("📍 Наш офис находится на 5 этаже.")
     await callback.answer()
+
+
+@router.message(Command("edit_onboarding"))
+async def cmd_edit_onboarding(message: Message, user: User):
+    if user.role != "hr": return
+    new_text = message.text.replace("/edit_onboarding", "").strip()
+    if not new_text:
+        return await message.answer("Отправьте текст после команды. Поддерживается HTML.")
+
+    async with async_session() as session:
+        res = await session.execute(select(SystemConfig).where(SystemConfig.key == "onboarding_text"))
+        cfg = res.scalar_one_or_none()
+        if cfg:
+            cfg.value = new_text
+        else:
+            session.add(SystemConfig(key="onboarding_text", value=new_text))
+        await session.commit()
+    await message.answer("Раздел онбординга обновлен.")

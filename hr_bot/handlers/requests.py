@@ -29,7 +29,7 @@ async def cancel_date(message: Message, state: FSMContext, user: User):
         await message.answer(MESSAGES[user.language_code]['main_menu'], reply_markup=main_menu_kb(user.language_code))
 
 @router.callback_query(CalCB.filter(), DayOffStates.waiting_for_date)
-async def process_date_cal(callback: CallbackQuery, callback_data: CalCB, state: FSMContext):
+async def process_date_cal(callback: CallbackQuery, callback_data: CalCB, state: FSMContext, user: User):
     selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback, callback_data)
     if selected:
         await state.update_data(date=date_obj)

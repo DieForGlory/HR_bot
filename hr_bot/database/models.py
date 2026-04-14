@@ -79,3 +79,8 @@ class Holiday(Base):
     __tablename__ = "holidays"
     id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[date] = mapped_column(Date, unique=True)
+
+class SystemConfig(Base):
+    __tablename__ = "system_config"
+    key: Mapped[str] = mapped_column(String(50), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)

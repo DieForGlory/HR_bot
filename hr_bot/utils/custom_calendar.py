@@ -8,6 +8,7 @@ from hr_bot.database.models import Holiday
 from sqlalchemy import select
 from hr_bot.locales.texts import MESSAGES
 
+
 class CalCB(CallbackData, prefix="ccal"):
     act: str
     y: int
@@ -28,14 +29,15 @@ class CustomCalendar:
     async def _get_days_kb(self, year: int, month: int) -> InlineKeyboardMarkup:
         async with async_session() as session:
             result = await session.execute(
-                select(Holiday.date).where(Holiday.date >= date(year, month, 1), Holiday.date <= date(year, month, calendar.monthrange(year, month)[1]))
+                select(Holiday.date).where(Holiday.date >= date(year, month, 1),
+                                           Holiday.date <= date(year, month, calendar.monthrange(year, month)[1]))
             )
             holidays = {row[0] for row in result.all()}
 
         b = InlineKeyboardBuilder()
-        b.button(text="<", callback_data=CalCB(act="p_m", y=year, m=month, d=1))
+        b.button(text="◀️", callback_data=CalCB(act="p_m", y=year, m=month, d=1))
         b.button(text=f"{self.months[month - 1]} {year}", callback_data=CalCB(act="s_m", y=year, m=month, d=1))
-        b.button(text=">", callback_data=CalCB(act="n_m", y=year, m=month, d=1))
+        b.button(text="▶️", callback_data=CalCB(act="n_m", y=year, m=month, d=1))
 
         for day in self.days:
             b.button(text=day, callback_data=CalCB(act="ig", y=0, m=0, d=0))
@@ -53,22 +55,26 @@ class CustomCalendar:
 
     def _get_months_kb(self, year: int) -> InlineKeyboardMarkup:
         b = InlineKeyboardBuilder()
-        b.button(text=f"Год: {year}", callback_data=CalCB(act="s_y", y=year, m=1, d=1))
+        b.button(text="◀️", callback_data=CalCB(act="p_y_m", y=year - 1, m=1, d=1))
+        b.button(text=f"{year}", callback_data=CalCB(act="s_y", y=year, m=1, d=1))
+        b.button(text="▶️", callback_data=CalCB(act="n_y_m", y=year + 1, m=1, d=1))
+
         for i, mo in enumerate(self.months, 1):
             b.button(text=mo, callback_data=CalCB(act="set_m", y=year, m=i, d=1))
-        b.adjust(1, 3, 3, 3, 3)
+        b.adjust(3, 3, 3, 3, 3)
         return b.as_markup()
 
     def _get_years_kb(self, year: int) -> InlineKeyboardMarkup:
         b = InlineKeyboardBuilder()
-        start = year - (year % 12)
-        b.button(text="<", callback_data=CalCB(act="p_y", y=start - 12, m=1, d=1))
-        b.button(text="Период", callback_data=CalCB(act="ig", y=0, m=0, d=0))
-        b.button(text=">", callback_data=CalCB(act="n_y", y=start + 12, m=1, d=1))
-        for i in range(12):
+        start = year - 12
+        b.button(text="◀️", callback_data=CalCB(act="p_y", y=start, m=1, d=1))
+        b.button(text=f"{start} - {start + 24}", callback_data=CalCB(act="ig", y=0, m=0, d=0))
+        b.button(text="▶️", callback_data=CalCB(act="n_y", y=start + 25, m=1, d=1))
+
+        for i in range(25):
             y = start + i
             b.button(text=str(y), callback_data=CalCB(act="set_y", y=y, m=1, d=1))
-        b.adjust(3, 3, 3, 3, 3)
+        b.adjust(3, 5, 5, 5, 5, 5)
         return b.as_markup()
 
     async def process_selection(self, call: CallbackQuery, data: CalCB) -> tuple[bool, date | None]:
@@ -87,13 +93,16 @@ class CustomCalendar:
             await call.message.edit_reply_markup(reply_markup=await self._get_days_kb(d.year, d.month))
         elif act == "s_m":
             await call.message.edit_reply_markup(reply_markup=self._get_months_kb(data.y))
+        elif act in ["p_y_m", "n_y_m"]:
+            await call.message.edit_reply_markup(reply_markup=self._get_months_kb(data.y))
         elif act == "set_m":
             await call.message.edit_reply_markup(reply_markup=await self._get_days_kb(data.y, data.m))
         elif act == "s_y":
             await call.message.edit_reply_markup(reply_markup=self._get_years_kb(data.y))
-        elif act in ["set_y", "p_y", "n_y"]:
-            if act == "set_y":
-                await call.message.edit_reply_markup(reply_markup=self._get_months_kb(data.y))
-            else:
-                await call.message.edit_reply_markup(reply_markup=self._get_years_kb(data.y))
+        elif act in ["p_y", "n_y"]:
+            await call.message.edit_reply_markup(reply_markup=self._get_years_kb(data.y))
+        elif act == "set_y":
+            await call.message.edit_reply_markup(reply_markup=self._get_months_kb(data.y))
+
+        await call.answer()
         return False, None

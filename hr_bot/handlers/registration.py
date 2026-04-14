@@ -14,7 +14,9 @@ from sqlalchemy import select
 
 router = Router()
 
+
 class RegStates(StatesGroup):
+    language = State()
     fullname = State()
     department = State()
     position = State()
@@ -23,17 +25,30 @@ class RegStates(StatesGroup):
     car_info = State()
     face_id_photo = State()
 
+
 @router.message(CommandStart())
 async def reg_start(message: Message, state: FSMContext, user: User = None):
     if user and user.is_active:
         lang = user.language_code
         return await message.answer(MESSAGES[lang]['main_menu'], reply_markup=main_menu_kb(lang))
 
-    await state.set_state(RegStates.fullname)
-    await message.answer(
-        "Введите ФИО. Ожидается 3 слова. При отсутствии отчества будет подставлено 'XXX'.",
-        reply_markup=ReplyKeyboardRemove()
+    await state.set_state(RegStates.language)
+    kb = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="🇷🇺 Русский"), KeyboardButton(text="🇺🇿 O'zbekcha")]],
+        resize_keyboard=True, one_time_keyboard=True
     )
+    await message.answer("Выберите язык / Tilni tanlang:", reply_markup=kb)
+
+
+@router.message(RegStates.language)
+async def reg_lang(message: Message, state: FSMContext):
+    lang_code = "uz" if "uz" in message.text.lower() else "ru"
+    await state.update_data(language_code=lang_code)
+    await state.set_state(RegStates.fullname)
+
+    text = "Введите ФИО. Ожидается 3 слова. При отсутствии отчества будет подставлено 'XXX'." if lang_code == 'ru' else "F.I.O kiriting. 3 ta so'z kutilmoqda."
+    await message.answer(text, reply_markup=ReplyKeyboardRemove())
+
 
 @router.message(RegStates.fullname)
 async def reg_name(message: Message, state: FSMContext):
@@ -46,11 +61,13 @@ async def reg_name(message: Message, state: FSMContext):
     await state.set_state(RegStates.department)
     await message.answer("Укажите Управление/Отдел:")
 
+
 @router.message(RegStates.department)
 async def reg_dept(message: Message, state: FSMContext):
     await state.update_data(department=message.text)
     await state.set_state(RegStates.position)
     await message.answer("Укажите должность:")
+
 
 @router.message(RegStates.position)
 async def reg_pos(message: Message, state: FSMContext):
@@ -59,17 +76,16 @@ async def reg_pos(message: Message, state: FSMContext):
 
     kb = ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="📱 Отправить контакт", request_contact=True)]],
-        resize_keyboard=True,
-        one_time_keyboard=True
+        resize_keyboard=True, one_time_keyboard=True
     )
     await message.answer("Отправьте контакт или введите номер вручную (РФ/РУз):", reply_markup=kb)
+
 
 @router.message(RegStates.phone, F.contact | F.text)
 async def reg_phone(message: Message, state: FSMContext):
     if message.contact:
         phone = message.contact.phone_number
-        if not phone.startswith('+'):
-            phone = '+' + phone
+        if not phone.startswith('+'): phone = '+' + phone
     else:
         phone_clean = re.sub(r'\D', '', message.text)
         is_ru = (phone_clean.startswith(('7', '8')) and len(phone_clean) == 11)
@@ -77,26 +93,32 @@ async def reg_phone(message: Message, state: FSMContext):
 
         if not (is_ru or is_uz):
             return await message.answer("Ошибка формата. Ожидается номер РФ (+7...) или РУз (+998...).")
-
         phone = f"+{phone_clean}" if not phone_clean.startswith('8') else f"+7{phone_clean[1:]}"
 
     await state.update_data(phone=phone)
     await state.set_state(RegStates.birth_date)
-    await message.answer("Выберите дату рождения:", reply_markup=await CustomCalendar(user.language_code).start_calendar())
+    data = await state.get_data()
+    await message.answer("Выберите дату рождения:",
+                         reply_markup=await CustomCalendar(data['language_code']).start_calendar())
+
 
 @router.callback_query(CalCB.filter(), RegStates.birth_date)
 async def process_calendar(callback_query: CallbackQuery, callback_data: CalCB, state: FSMContext):
-    selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback_query, callback_data)
+    data = await state.get_data()
+    selected, date_obj = await CustomCalendar(data['language_code']).process_selection(callback_query, callback_data)
     if selected:
         await state.update_data(birth_date=date_obj.strftime("%d.%m.%Y"))
         await state.set_state(RegStates.car_info)
-        await callback_query.message.answer("Укажите номер и марку авто (или 'нет'):", reply_markup=ReplyKeyboardRemove())
+        await callback_query.message.answer("Укажите номер и марку авто (или 'нет'):",
+                                            reply_markup=ReplyKeyboardRemove())
+
 
 @router.message(RegStates.car_info)
 async def reg_car(message: Message, state: FSMContext):
     await state.update_data(car_info=message.text)
     await state.set_state(RegStates.face_id_photo)
     await message.answer("Загрузите фото для Face ID:")
+
 
 @router.message(RegStates.face_id_photo, F.photo)
 async def reg_photo(message: Message, state: FSMContext, bot: Bot):
@@ -114,6 +136,7 @@ async def reg_photo(message: Message, state: FSMContext, bot: Bot):
             birth_date=data['birth_date'],
             car_info=data['car_info'],
             face_id_photo=photo_id,
+            language_code=data['language_code'],
             is_active=False
         )
         session.add(new_user)
@@ -122,12 +145,12 @@ async def reg_photo(message: Message, state: FSMContext, bot: Bot):
         hrs = await session.execute(select(User).where(User.role == "hr"))
         for hr in hrs.scalars():
             await bot.send_photo(
-                hr.tg_id,
-                photo_id,
+                hr.tg_id, photo_id,
                 caption=f"📝 Новая заявка:\nФИО: {data['fullname']}\nОтдел: {data['department']}\nТел: {data['phone']}\nДР: {data['birth_date']}",
                 reply_markup=get_reg_approval_kb(new_user.tg_id)
             )
         await session.commit()
 
     await state.clear()
-    await message.answer("Анкета отправлена на проверку.")
+    text = "Анкета отправлена на проверку." if data['language_code'] == 'ru' else "Anketa tekshirishga yuborildi."
+    await message.answer(text)
