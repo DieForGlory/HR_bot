@@ -24,11 +24,9 @@ async def main():
 
     bot = Bot(token=config.bot_token.get_secret_value())
     dp = Dispatcher()
-
     auth_mw = AuthMiddleware()
     dp.message.outer_middleware(auth_mw)
     dp.callback_query.outer_middleware(auth_mw)
-
     dp.include_router(registration.router)
     dp.include_router(admin.router)
     dp.include_router(common.router)
@@ -37,9 +35,8 @@ async def main():
     dp.include_router(vacation.router)
     dp.include_router(hr_chat.router)
     dp.include_router(certificates.router)
-    dp.include_router(onboarding.router) # Новый
-    dp.include_router(surveys.router)    # Новый
-
+    dp.include_router(onboarding.router)
+    dp.include_router(surveys.router)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
