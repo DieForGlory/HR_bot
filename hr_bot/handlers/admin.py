@@ -102,7 +102,7 @@ async def manage_calendar(message: Message, user: User, state: FSMContext):
 
 
 @router.callback_query(CalCB.filter(), HolidayState.managing)
-async def toggle_holiday(callback: CallbackQuery, callback_data: CalCB, state: FSMContext):
+async def toggle_holiday(callback: CallbackQuery, callback_data: CalCB, state: FSMContext, user: User):
     selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback, callback_data)
     if selected:
         async with async_session() as session:
@@ -210,3 +210,27 @@ async def cmd_structure(message: Message, user: User):
         parent = f" | Родитель: {d.parent_id}" if d.parent_id else " | (Корневое)"
         out.append(f"[ID: {d.id}] {d.name} | Глава: {head_name}{parent}")
     await message.answer("\n".join(out) if out else "Структура не задана.")
+
+
+@router.message(Command("admin_help"))
+async def cmd_admin_help(message: Message, user: User):
+    if user.role != "hr":
+        return
+
+    help_text = (
+        "🛠 **Панель команд администратора (HR)**\n\n"
+        "**Организационная структура:**\n"
+        "• `/add_dept <Название>` — Создать новое подразделение.\n"
+        "• `/link_dept <ID_Дочернего> <ID_Родительского>` — Установить подчинение отделов.\n"
+        "• `/set_head <ID_Подразделения> <TG_ID_Руководителя>` — Назначить руководителя отдела.\n"
+        "• `/structure` — Показать текущее дерево подразделений и руководителей.\n"
+        "• `/set_manager <ID_сотрудника_TG> <ID_руководителя_TG>` — Персональная привязка сотрудника к руководителю (вне структуры).\n\n"
+        "**Управление контентом:**\n"
+        "• `/manage_calendar` — Открыть редактор производственного календаря.\n"
+        "• `/edit_onboarding <Текст>` — Изменить приветственный текст раздела 'Онбординг' (поддерживает HTML).\n\n"
+        "**Опросы:**\n"
+        "• `/create_survey` — Запустить мастер создания нового опроса.\n"
+        "• `/survey_results <ID_опроса>` — Выгрузить ответы сотрудников по конкретному опросу."
+    )
+
+    await message.answer(help_text, parse_mode="Markdown")
