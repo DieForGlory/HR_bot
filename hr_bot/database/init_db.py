@@ -5,7 +5,6 @@ from hr_bot.database.models import Base, User
 
 async def init_db():
     async with engine.begin() as conn:
-        # Внимание: удаляет существующие таблицы. Использовать только при развертывании.
         await conn.run_sync(Base.metadata.create_all)
 
     async with async_session() as session:

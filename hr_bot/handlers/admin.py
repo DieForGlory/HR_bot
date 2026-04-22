@@ -11,6 +11,7 @@ from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
 from aiogram.types import CallbackQuery, Message
 from hr_bot.utils.logger import log_action
 from hr_bot.database.models import Department
+from aiogram_calendar import DialogCalendar, DialogCalendarCallback
 
 router = Router()
 
@@ -96,14 +97,18 @@ async def manage_calendar(message: Message, user: User, state: FSMContext):
     if user.role != "hr":
         return
     await state.set_state(HolidayState.managing)
+    locale = 'ru_RU' if user.language_code == 'ru' else 'uz_UZ'
     await message.answer(
-        "Управление производственным календарем.\nНажмите на дату для добавления/удаления выходного дня (выделяются скобками []).",
-        reply_markup=await CustomCalendar(user.language_code).start_calendar())
+        "Управление производственным календарем.\nВыберите дату для добавления/удаления выходного дня.",
+        reply_markup=await DialogCalendar(locale=locale).start_calendar()
+    )
 
 
-@router.callback_query(CalCB.filter(), HolidayState.managing)
-async def toggle_holiday(callback: CallbackQuery, callback_data: CalCB, state: FSMContext, user: User):
-    selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback, callback_data)
+@router.callback_query(DialogCalendarCallback.filter(), HolidayState.managing)
+async def toggle_holiday(callback: CallbackQuery, callback_data: DialogCalendarCallback, state: FSMContext, user: User):
+    locale = 'ru_RU' if user.language_code == 'ru' else 'uz_UZ'
+    selected, date_obj = await DialogCalendar(locale=locale).process_selection(callback, callback_data)
+
     if selected:
         async with async_session() as session:
             result = await session.execute(select(Holiday).where(Holiday.date == date_obj))
@@ -117,9 +122,10 @@ async def toggle_holiday(callback: CallbackQuery, callback_data: CalCB, state: F
                 status = "Добавлен в выходные"
             await session.commit()
 
+        # Так как DialogCalendar скрывается после выбора, мы генерируем его заново
         await callback.message.edit_text(
             f"Статус изменен: {date_obj.strftime('%d.%m.%Y')} - {status}",
-            reply_markup=await CustomCalendar(user.language_code).start_calendar(date_obj.year, date_obj.month)
+            reply_markup=await DialogCalendar(locale=locale).start_calendar()
         )
 
 

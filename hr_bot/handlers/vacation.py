@@ -11,6 +11,7 @@ from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
 from hr_bot.utils.logger import log_action
 from hr_bot.utils.hierarchy import get_manager_tg_id
 from sqlalchemy import select
+from aiogram_calendar import DialogCalendar, DialogCalendarCallback
 
 router = Router()
 
@@ -57,8 +58,10 @@ async def vac_apply(callback: CallbackQuery, state: FSMContext, user: DBUser):
 
     await state.set_state(VacationStates.waiting_for_start)
     await callback.message.answer("Оформление отпуска.", reply_markup=back_kb(user.language_code))
+
+    locale = 'ru_RU' if user.language_code == 'ru' else 'uz_UZ'
     await callback.message.answer("Выберите дату начала:",
-                                  reply_markup=await CustomCalendar(user.language_code).start_calendar())
+                                  reply_markup=await DialogCalendar(locale=locale).start_calendar())
     await callback.answer()
 
 
@@ -69,35 +72,43 @@ async def cancel_vac_start(message: Message, state: FSMContext, user: DBUser):
         await message.answer(MESSAGES[user.language_code]['main_menu'], reply_markup=main_menu_kb(user.language_code))
 
 
-@router.callback_query(CalCB.filter(), VacationStates.waiting_for_start)
-async def process_vac_start_cal(callback: CallbackQuery, callback_data: CalCB, state: FSMContext, user: DBUser):
-    selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback, callback_data)
+@router.callback_query(DialogCalendarCallback.filter(), VacationStates.waiting_for_start)
+async def process_vac_start_cal(callback: CallbackQuery, callback_data: DialogCalendarCallback, state: FSMContext,
+                                user: DBUser):
+    locale = 'ru_RU' if user.language_code == 'ru' else 'uz_UZ'
+    selected, date_obj = await DialogCalendar(locale=locale).process_selection(callback, callback_data)
+
     if selected:
+        await callback.message.delete()
         await state.update_data(start_date=date_obj)
         await state.set_state(VacationStates.waiting_for_end)
         await callback.message.answer("Выберите дату окончания:",
-                                      reply_markup=await CustomCalendar(user.language_code).start_calendar())
+                                      reply_markup=await DialogCalendar(locale=locale).start_calendar())
 
 
 @router.message(VacationStates.waiting_for_end, F.text)
 async def back_vac_end(message: Message, state: FSMContext, user: DBUser):
     if message.text == MESSAGES[user.language_code]['back']:
         await state.set_state(VacationStates.waiting_for_start)
-        await message.answer("Выберите дату начала:",
-                             reply_markup=await CustomCalendar(user.language_code).start_calendar())
+        locale = 'ru_RU' if user.language_code == 'ru' else 'uz_UZ'
+        await message.answer("Выберите дату начала:", reply_markup=await DialogCalendar(locale=locale).start_calendar())
 
 
-@router.callback_query(CalCB.filter(), VacationStates.waiting_for_end)
-async def process_vac_end_cal(callback: CallbackQuery, callback_data: CalCB, state: FSMContext, user: DBUser, bot: Bot):
-    selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback, callback_data)
+@router.callback_query(DialogCalendarCallback.filter(), VacationStates.waiting_for_end)
+async def process_vac_end_cal(callback: CallbackQuery, callback_data: DialogCalendarCallback, state: FSMContext,
+                              user: DBUser, bot: Bot):
+    locale = 'ru_RU' if user.language_code == 'ru' else 'uz_UZ'
+    selected, date_obj = await DialogCalendar(locale=locale).process_selection(callback, callback_data)
+
     if selected:
+        await callback.message.delete()
         data = await state.get_data()
         start_date = data['start_date']
         end_date = date_obj
 
         if end_date <= start_date:
             await callback.message.answer("Ошибка: Дата окончания должна быть позже даты начала.\nВыберите заново:",
-                                          reply_markup=await CustomCalendar(user.language_code).start_calendar())
+                                          reply_markup=await DialogCalendar(locale=locale).start_calendar())
             return
 
         async with async_session() as session:

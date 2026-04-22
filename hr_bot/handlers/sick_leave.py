@@ -11,6 +11,7 @@ from hr_bot.utils.custom_calendar import CustomCalendar, CalCB
 from hr_bot.utils.logger import log_action
 from hr_bot.utils.hierarchy import get_manager_tg_id
 from sqlalchemy import select
+from aiogram_calendar import DialogCalendar, DialogCalendarCallback
 
 router = Router()
 
@@ -24,8 +25,9 @@ class SickLeaveStates(StatesGroup):
 async def start_sick_leave(message: Message, state: FSMContext, user: User):
     await state.set_state(SickLeaveStates.waiting_for_date)
     await message.answer("Оформление больничного.", reply_markup=back_kb(user.language_code))
-    await message.answer("Выберите дату начала:",
-                         reply_markup=await CustomCalendar(user.language_code).start_calendar())
+
+    locale = 'ru_RU' if user.language_code == 'ru' else 'uz_UZ'
+    await message.answer("Выберите дату начала:", reply_markup=await DialogCalendar(locale=locale).start_calendar())
 
 
 @router.message(SickLeaveStates.waiting_for_date, F.text)
@@ -35,10 +37,14 @@ async def cancel_sick_date(message: Message, state: FSMContext, user: User):
         await message.answer(MESSAGES[user.language_code]['main_menu'], reply_markup=main_menu_kb(user.language_code))
 
 
-@router.callback_query(CalCB.filter(), SickLeaveStates.waiting_for_date)
-async def process_sick_date_cal(callback: CallbackQuery, callback_data: CalCB, state: FSMContext, user: User):
-    selected, date_obj = await CustomCalendar(user.language_code).process_selection(callback, callback_data)
+@router.callback_query(DialogCalendarCallback.filter(), SickLeaveStates.waiting_for_date)
+async def process_sick_date_cal(callback: CallbackQuery, callback_data: DialogCalendarCallback, state: FSMContext,
+                                user: User):
+    locale = 'ru_RU' if user.language_code == 'ru' else 'uz_UZ'
+    selected, date_obj = await DialogCalendar(locale=locale).process_selection(callback, callback_data)
+
     if selected:
+        await callback.message.delete()
         await state.update_data(date=date_obj)
         await state.set_state(SickLeaveStates.waiting_for_doc)
         await callback.message.answer("Загрузите фото справки (только JPG или PNG):")
@@ -48,8 +54,8 @@ async def process_sick_date_cal(callback: CallbackQuery, callback_data: CalCB, s
 async def back_sick_doc(message: Message, state: FSMContext, user: User):
     if message.text == MESSAGES[user.language_code]['back']:
         await state.set_state(SickLeaveStates.waiting_for_date)
-        await message.answer("Выберите дату начала:",
-                             reply_markup=await CustomCalendar(user.language_code).start_calendar())
+        locale = 'ru_RU' if user.language_code == 'ru' else 'uz_UZ'
+        await message.answer("Выберите дату начала:", reply_markup=await DialogCalendar(locale=locale).start_calendar())
     else:
         await message.answer("Пожалуйста, отправьте файл (JPG/PNG) или нажмите кнопку 'Назад'.")
 
