@@ -37,7 +37,7 @@ async def main():
     dp.include_router(certificates.router)
     dp.include_router(onboarding.router)
     dp.include_router(surveys.router)
-    await dp.start_polling(bot)
+    await dp.start_polling(bot)#123
 
 if __name__ == "__main__":
     try:
